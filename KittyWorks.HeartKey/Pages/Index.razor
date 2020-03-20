@@ -1,7 +1,48 @@
 ﻿@page "/"
+@using KittyWorks.HeartKey.Models
+@inject HttpClient Http
 
-<h1>Hello, world!</h1>
+<TelerikChart Width="100%" Height="100%" @ref="_chart">
+    <ChartSeriesItems>
+        <ChartSeries Type="ChartSeriesType.Line"
+                     Data="_heartbeat?.ActivitiesHeart"
+                     Field="Value.RestingHeartRate"
+                     CategoryField="@nameof(ActivitiesHeart.DateTime)"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth">
+            <ChartSeriesMarkers Type="ChartSeriesMarkersType.Triangle" Size="4" />
+        </ChartSeries>
+    </ChartSeriesItems>
+    <ChartCategoryAxes>
+        <ChartCategoryAxis BaseUnit="ChartCategoryAxisBaseUnit.Days" Type="ChartCategoryAxisType.Date"></ChartCategoryAxis>
+    </ChartCategoryAxes>
+    <ChartTitle Text="@(_heartbeat == null ? "Heartbeat" : "❤ Heartbeat ❤")"></ChartTitle>
+</TelerikChart>
 
-Welcome to your new app.
+<div style="position: absolute; left: 10px; top: 10px;">
+    <TelerikTextBox @bind-Value="_token"/>
+    <TelerikButton OnClick="LoadHeartbeatAsync" Enabled="_isTokenValid">Load</TelerikButton>
+</div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+@code
+{
+    private Heartbeat _heartbeat = null;
+    private string _token = "";
+    private bool _isTokenValid => !string.IsNullOrEmpty(_token);
+
+    TelerikChart _chart = null;
+
+    private async Task LoadHeartbeatAsync()
+    {
+        var from = DateTimeOffset.UtcNow.AddDays(-30);
+        var to = DateTimeOffset.UtcNow.AddDays(-1);
+        var url = $"https://api.fitbit.com/1/user/-/activities/heart/date/{from:yyyy-MM-dd}/{to:yyyy-MM-dd}.json";
+
+        Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+
+        var data = await Http.GetStringAsync(url);
+        _heartbeat = Newtonsoft.Json.JsonConvert.DeserializeObject<Heartbeat>(data);
+
+        _chart.Refresh();
+    }
+}
