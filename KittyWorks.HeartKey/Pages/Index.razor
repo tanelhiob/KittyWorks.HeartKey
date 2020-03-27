@@ -1,36 +1,88 @@
 ﻿@page "/"
 @using KittyWorks.HeartKey.Models
-@inject HttpClient Http
+@inject IConfiguration _configuration
+@inject HttpClient _httpClient
+
+@if (_series != null)
+{
+    <div>@_series[0].Count()</div>
+    <div>@_series[1].Count()</div>
+    <div>@_series[2].Count()</div>
+    <div>@_series[3].Count()</div>
+    <div>@_series[4].Count()</div>
+}
 
 <TelerikChart Width="100%" Height="100%" @ref="_chart">
     <ChartSeriesItems>
-        <ChartSeries Type="ChartSeriesType.Line"
-                     Data="_heartbeat?.ActivitiesHeart"
-                     Field="Value.RestingHeartRate"
-                     CategoryField="@nameof(ActivitiesHeart.DateTime)"
+        <ChartSeries Type="ChartSeriesType.Column"
+                     Name="Offline"
+                     Data="_series"
+                     Field="Value"
+                     CategoryField="DateTime"
                      Aggregate="ChartSeriesAggregate.Avg"
                      Style="ChartSeriesStyle.Smooth">
-            <ChartSeriesMarkers Type="ChartSeriesMarkersType.Triangle" Size="4" />
+            <ChartSeriesStack Enabled="true" />
+        </ChartSeries>
+        <ChartSeries Type="ChartSeriesType.Column"
+                     Name="Out Of Range"
+                     Data="_series?.ElementAt(1).Cast<object>()"
+                     Field="Value"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth">
+            <ChartSeriesStack Enabled="true" />
+        </ChartSeries>
+        <ChartSeries Type="ChartSeriesType.Column"
+                     Name="Fat Burn"
+                     Data="_series?.ElementAt(2).Cast<object>()"
+                     Field="Value"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth">
+            <ChartSeriesStack Enabled="true" />
+        </ChartSeries>
+        <ChartSeries Type="ChartSeriesType.Column"
+                     Name="Cardio"
+                     Data="_series?.ElementAt(3).Cast<object>()"
+                     Field="Value"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth">
+            <ChartSeriesStack Enabled="true" />
+        </ChartSeries>
+        <ChartSeries Type="ChartSeriesType.Column"
+                     Name="Peak"
+                     Data="_series?.ElementAt(4).Cast<object>()"
+                     Field="Value"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth">
+            <ChartSeriesStack Enabled="true" />
         </ChartSeries>
     </ChartSeriesItems>
     <ChartCategoryAxes>
         <ChartCategoryAxis BaseUnit="ChartCategoryAxisBaseUnit.Days" Type="ChartCategoryAxisType.Date"></ChartCategoryAxis>
     </ChartCategoryAxes>
-    <ChartTitle Text="@(_heartbeat == null ? "Heartbeat" : "❤ Heartbeat ❤")"></ChartTitle>
+    <ChartTitle Text="@(_series == null ? "Heartbeat" : "❤ Heartbeat ❤")"></ChartTitle>
 </TelerikChart>
 
 <div style="position: absolute; left: 10px; top: 10px;">
-    <TelerikTextBox @bind-Value="_token"/>
+    <TelerikTextBox @bind-Value="_token" />
     <TelerikButton OnClick="LoadHeartbeatAsync" Enabled="_isTokenValid">Load</TelerikButton>
 </div>
 
 @code
 {
-    private Heartbeat _heartbeat = null;
-    private string _token = "";
+    private List<List<(DateTimeOffset DateTime, float Value)>> _series = null;
+    private string _token = string.Empty;
     private bool _isTokenValid => !string.IsNullOrEmpty(_token);
 
     TelerikChart _chart = null;
+
+    protected override void OnInitialized()
+    {
+        _token = _configuration["Fitbit:token"];
+    }
 
     private async Task LoadHeartbeatAsync()
     {
@@ -38,11 +90,56 @@
         var to = DateTimeOffset.UtcNow.AddDays(-1);
         var url = $"https://api.fitbit.com/1/user/-/activities/heart/date/{from:yyyy-MM-dd}/{to:yyyy-MM-dd}.json";
 
-        Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
 
-        var data = await Http.GetStringAsync(url);
-        _heartbeat = Newtonsoft.Json.JsonConvert.DeserializeObject<Heartbeat>(data);
+        var data = await _httpClient.GetStringAsync(url);
+        var heartbeat = Newtonsoft.Json.JsonConvert.DeserializeObject<Heartbeat>(data);
+
+        _series = CalculateSeries(heartbeat);
 
         _chart.Refresh();
+    }
+
+    private List<List<(DateTimeOffset DateTime, float Value)>> CalculateSeries(Heartbeat heartbeat)
+    {
+        var stackItems = heartbeat.ActivitiesHeart.Select(CalculateStackItem);
+        var stacks = new[]
+        {
+            stackItems.Select(x => (x.DateTime, x.OfflineMinutes)).ToList(),
+            stackItems.Select(x => (x.DateTime, x.OutOfRangeMinutes)).ToList(),
+            stackItems.Select(x => (x.DateTime, x.FatBurnMinutes)).ToList(),
+            stackItems.Select(x => (x.DateTime, x.CardioMinutes)).ToList(),
+            stackItems.Select(x => (x.DateTime, x.PeakMinutes)).ToList(),
+        }.ToList();
+
+        return stacks;
+    }
+
+    private StackItem CalculateStackItem(ActivitiesHeart activitiesHeart)
+    {
+        var offlineMinutes = 1440 - activitiesHeart.Value.HeartRateZones.Sum(x => x.Minutes);
+        var total = activitiesHeart.Value.RestingHeartRate;
+
+        return new StackItem
+        {
+            DateTime = activitiesHeart.DateTime,
+            Total = total,
+            OfflineMinutes = total * offlineMinutes / 1440,
+            OutOfRangeMinutes = total * activitiesHeart.Value.HeartRateZones[0].Minutes / 1440,
+            FatBurnMinutes = total * activitiesHeart.Value.HeartRateZones[1].Minutes / 1440,
+            CardioMinutes = total * activitiesHeart.Value.HeartRateZones[2].Minutes / 1440,
+            PeakMinutes = total * activitiesHeart.Value.HeartRateZones[3].Minutes / 1440,
+        };
+    }
+
+    private class StackItem
+    {
+        public DateTimeOffset DateTime { get; set; }
+        public int Total;
+        public float OfflineMinutes;
+        public float OutOfRangeMinutes;
+        public float FatBurnMinutes;
+        public float CardioMinutes;
+        public float PeakMinutes;
     }
 }
