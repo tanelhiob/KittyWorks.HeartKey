@@ -3,67 +3,66 @@
 @inject IConfiguration _configuration
 @inject HttpClient _httpClient
 
-@if (_series != null)
-{
-    <div>@_series[0].Count()</div>
-    <div>@_series[1].Count()</div>
-    <div>@_series[2].Count()</div>
-    <div>@_series[3].Count()</div>
-    <div>@_series[4].Count()</div>
-}
-
 <TelerikChart Width="100%" Height="100%" @ref="_chart">
     <ChartSeriesItems>
-        <ChartSeries Type="ChartSeriesType.Column"
-                     Name="Offline"
-                     Data="_series"
-                     Field="Value"
+        <ChartSeries Type="ChartSeriesType.Line"
+                     Name="Beats"
+                     Data="_days"
+                     Field="TotalBeats"
                      CategoryField="DateTime"
                      Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">
+                     Style="ChartSeriesStyle.Smooth">                     
+        </ChartSeries>
+        <ChartSeries Type="ChartSeriesType.Column"
+                        Name="Offline"
+                        Data="_days"
+                        Field="Offline"
+                        CategoryField="DateTime"
+                        Aggregate="ChartSeriesAggregate.Avg"
+                        Style="ChartSeriesStyle.Smooth">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                     Name="Out Of Range"
-                     Data="_series?.ElementAt(1).Cast<object>()"
-                     Field="Value"
-                     CategoryField="DateTime"
-                     Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">
+                        Name="Normal"
+                        Data="_days"
+                        Field="OutOfRange"
+                        CategoryField="DateTime"
+                        Aggregate="ChartSeriesAggregate.Avg"
+                        Style="ChartSeriesStyle.Smooth">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                     Name="Fat Burn"
-                     Data="_series?.ElementAt(2).Cast<object>()"
-                     Field="Value"
-                     CategoryField="DateTime"
-                     Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">
+                        Name="Fat Burn"
+                        Data="_days"
+                        Field="FatBurn"
+                        CategoryField="DateTime"
+                        Aggregate="ChartSeriesAggregate.Avg"
+                        Style="ChartSeriesStyle.Smooth">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                     Name="Cardio"
-                     Data="_series?.ElementAt(3).Cast<object>()"
-                     Field="Value"
-                     CategoryField="DateTime"
-                     Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">
+                        Name="Cardio"
+                        Data="_days"
+                        Field="Cardio"
+                        CategoryField="DateTime"
+                        Aggregate="ChartSeriesAggregate.Avg"
+                        Style="ChartSeriesStyle.Smooth">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                     Name="Peak"
-                     Data="_series?.ElementAt(4).Cast<object>()"
-                     Field="Value"
-                     CategoryField="DateTime"
-                     Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">
+                        Name="Peak"
+                        Data="_days"
+                        Field="Peak"
+                        CategoryField="DateTime"
+                        Aggregate="ChartSeriesAggregate.Avg"
+                        Style="ChartSeriesStyle.Smooth">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
     </ChartSeriesItems>
     <ChartCategoryAxes>
         <ChartCategoryAxis BaseUnit="ChartCategoryAxisBaseUnit.Days" Type="ChartCategoryAxisType.Date"></ChartCategoryAxis>
     </ChartCategoryAxes>
-    <ChartTitle Text="@(_series == null ? "Heartbeat" : "❤ Heartbeat ❤")"></ChartTitle>
+    <ChartTitle Text="@(_days == null ? "Heartbeat" : "❤ Heartbeat ❤")"></ChartTitle>
 </TelerikChart>
 
 <div style="position: absolute; left: 10px; top: 10px;">
@@ -73,9 +72,10 @@
 
 @code
 {
-    private List<List<(DateTimeOffset DateTime, float Value)>> _series = null;
-    private string _token = string.Empty;
-    private bool _isTokenValid => !string.IsNullOrEmpty(_token);
+    IList<DayInfo> _days = new List<DayInfo>();
+
+    string _token = string.Empty;
+    bool _isTokenValid => !string.IsNullOrEmpty(_token);
 
     TelerikChart _chart = null;
 
@@ -95,51 +95,35 @@
         var data = await _httpClient.GetStringAsync(url);
         var heartbeat = Newtonsoft.Json.JsonConvert.DeserializeObject<Heartbeat>(data);
 
-        _series = CalculateSeries(heartbeat);
-
+        _days = heartbeat.ActivitiesHeart.Select(CalculateDayInfo).ToList();
         _chart.Refresh();
     }
 
-    private List<List<(DateTimeOffset DateTime, float Value)>> CalculateSeries(Heartbeat heartbeat)
-    {
-        var stackItems = heartbeat.ActivitiesHeart.Select(CalculateStackItem);
-        var stacks = new[]
-        {
-            stackItems.Select(x => (x.DateTime, x.OfflineMinutes)).ToList(),
-            stackItems.Select(x => (x.DateTime, x.OutOfRangeMinutes)).ToList(),
-            stackItems.Select(x => (x.DateTime, x.FatBurnMinutes)).ToList(),
-            stackItems.Select(x => (x.DateTime, x.CardioMinutes)).ToList(),
-            stackItems.Select(x => (x.DateTime, x.PeakMinutes)).ToList(),
-        }.ToList();
-
-        return stacks;
-    }
-
-    private StackItem CalculateStackItem(ActivitiesHeart activitiesHeart)
+    private DayInfo CalculateDayInfo(ActivitiesHeart activitiesHeart)
     {
         var offlineMinutes = 1440 - activitiesHeart.Value.HeartRateZones.Sum(x => x.Minutes);
-        var total = activitiesHeart.Value.RestingHeartRate;
+        var totalBeats = activitiesHeart.Value.RestingHeartRate;
 
-        return new StackItem
+        return new DayInfo
         {
             DateTime = activitiesHeart.DateTime,
-            Total = total,
-            OfflineMinutes = total * offlineMinutes / 1440,
-            OutOfRangeMinutes = total * activitiesHeart.Value.HeartRateZones[0].Minutes / 1440,
-            FatBurnMinutes = total * activitiesHeart.Value.HeartRateZones[1].Minutes / 1440,
-            CardioMinutes = total * activitiesHeart.Value.HeartRateZones[2].Minutes / 1440,
-            PeakMinutes = total * activitiesHeart.Value.HeartRateZones[3].Minutes / 1440,
+            TotalBeats = totalBeats,
+            Offline = totalBeats * offlineMinutes / 1440,
+            OutOfRange = totalBeats * activitiesHeart.Value.HeartRateZones[0].Minutes / 1440,
+            FatBurn = totalBeats * activitiesHeart.Value.HeartRateZones[1].Minutes / 1440,
+            Cardio = totalBeats * activitiesHeart.Value.HeartRateZones[2].Minutes / 1440,
+            Peak = totalBeats * activitiesHeart.Value.HeartRateZones[3].Minutes / 1440,
         };
     }
 
-    private class StackItem
+    private class DayInfo
     {
         public DateTimeOffset DateTime { get; set; }
-        public int Total;
-        public float OfflineMinutes;
-        public float OutOfRangeMinutes;
-        public float FatBurnMinutes;
-        public float CardioMinutes;
-        public float PeakMinutes;
+        public int TotalBeats;
+        public float Offline;
+        public float OutOfRange;
+        public float FatBurn;
+        public float Cardio;
+        public float Peak;
     }
 }
