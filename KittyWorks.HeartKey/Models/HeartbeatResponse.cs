@@ -1,11 +1,11 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
+using System.Text.Json.Serialization;
 
 namespace KittyWorks.HeartKey.Models
 {
     public class Heartbeat
     {
-        [JsonProperty("activities-heart")]
+        [JsonPropertyName("activities-heart")]
         public ActivitiesHeart[] ActivitiesHeart { get; set; }
     }
     

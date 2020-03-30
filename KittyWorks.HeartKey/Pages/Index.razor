@@ -84,7 +84,7 @@
         _token = _configuration["Fitbit:token"];
     }
 
-    private async Task LoadHeartbeatAsync()
+    async Task LoadHeartbeatAsync()
     {
         var from = DateTimeOffset.UtcNow.AddDays(-30);
         var to = DateTimeOffset.UtcNow.AddDays(-1);
@@ -92,14 +92,13 @@
 
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
 
-        var data = await _httpClient.GetStringAsync(url);
-        var heartbeat = Newtonsoft.Json.JsonConvert.DeserializeObject<Heartbeat>(data);
+        var heartbeat = await _httpClient.GetFromJsonAsync<Heartbeat>(url);
 
         _days = heartbeat.ActivitiesHeart.Select(CalculateDayInfo).ToList();
         _chart.Refresh();
     }
 
-    private DayInfo CalculateDayInfo(ActivitiesHeart activitiesHeart)
+    DayInfo CalculateDayInfo(ActivitiesHeart activitiesHeart)
     {
         var offlineMinutes = 1440 - activitiesHeart.Value.HeartRateZones.Sum(x => x.Minutes);
         var totalBeats = activitiesHeart.Value.RestingHeartRate;
@@ -116,9 +115,9 @@
         };
     }
 
-    private class DayInfo
+    class DayInfo
     {
-        public DateTimeOffset DateTime { get; set; }
+        public DateTimeOffset DateTime;
         public int TotalBeats;
         public float Offline;
         public float OutOfRange;
