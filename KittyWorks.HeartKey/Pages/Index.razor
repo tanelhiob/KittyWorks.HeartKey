@@ -11,51 +11,57 @@
                      Field="TotalBeats"
                      CategoryField="DateTime"
                      Aggregate="ChartSeriesAggregate.Avg"
-                     Style="ChartSeriesStyle.Smooth">                     
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Red">                     
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                        Name="Offline"
-                        Data="_days"
-                        Field="Offline"
-                        CategoryField="DateTime"
-                        Aggregate="ChartSeriesAggregate.Avg"
-                        Style="ChartSeriesStyle.Smooth">
+                     Name="Offline"
+                     Data="_days"
+                     Field="Offline"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Grey">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                        Name="Normal"
-                        Data="_days"
-                        Field="OutOfRange"
-                        CategoryField="DateTime"
-                        Aggregate="ChartSeriesAggregate.Avg"
-                        Style="ChartSeriesStyle.Smooth">
+                     Name="Normal"
+                     Data="_days"
+                     Field="OutOfRange"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Green">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                        Name="Fat Burn"
-                        Data="_days"
-                        Field="FatBurn"
-                        CategoryField="DateTime"
-                        Aggregate="ChartSeriesAggregate.Avg"
-                        Style="ChartSeriesStyle.Smooth">
+                     Name="Fat Burn"
+                     Data="_days"
+                     Field="FatBurn"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Yellow">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                        Name="Cardio"
-                        Data="_days"
-                        Field="Cardio"
-                        CategoryField="DateTime"
-                        Aggregate="ChartSeriesAggregate.Avg"
-                        Style="ChartSeriesStyle.Smooth">
+                     Name="Cardio"
+                     Data="_days"
+                     Field="Cardio"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Orange">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
         <ChartSeries Type="ChartSeriesType.Column"
-                        Name="Peak"
-                        Data="_days"
-                        Field="Peak"
-                        CategoryField="DateTime"
-                        Aggregate="ChartSeriesAggregate.Avg"
-                        Style="ChartSeriesStyle.Smooth">
+                     Name="Peak"
+                     Data="_days"
+                     Field="Peak"
+                     CategoryField="DateTime"
+                     Aggregate="ChartSeriesAggregate.Avg"
+                     Style="ChartSeriesStyle.Smooth"
+                     Color="Red">
             <ChartSeriesStack Enabled="true" />
         </ChartSeries>
     </ChartSeriesItems>
@@ -72,22 +78,27 @@
 
 @code
 {
-    IList<DayInfo> _days = new List<DayInfo>();
+    IList<DayInfo> _days = null;
 
     string _token = string.Empty;
     bool _isTokenValid => !string.IsNullOrEmpty(_token);
 
     TelerikChart _chart = null;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _token = _configuration["Fitbit:token"];
+
+        if (!string.IsNullOrEmpty(_token))
+        {
+            await LoadHeartbeatAsync();
+        }
     }
 
     async Task LoadHeartbeatAsync()
     {
         var from = DateTimeOffset.UtcNow.AddDays(-30);
-        var to = DateTimeOffset.UtcNow.AddDays(-1);
+        var to = DateTimeOffset.UtcNow.AddDays(0);
         var url = $"https://api.fitbit.com/1/user/-/activities/heart/date/{from:yyyy-MM-dd}/{to:yyyy-MM-dd}.json";
 
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
